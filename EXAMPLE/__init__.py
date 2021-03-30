@@ -2,11 +2,15 @@
 from binance.client import Client
 from datetime import datetime
 import settings
+import numpy as np
+import talib as ta
+from statistics import mean
 import os
 
 class Trader:
     BIDS = 'bids'
     ASKS = 'asks'
+    FIBONACCI_VALUES = [23.6, 38.2, 50.0, 61.8, 78.6]
     def __init__(self):
         self.client = Client(str(os.getenv("API_PUBLIC")), str(os.getenv("API_SECRET")))
     
@@ -71,19 +75,116 @@ class Trader:
             candle = self.client.get_historical_klines(symbol=currency, interval=switch.get(minute, lambda: Client.KLINE_INTERVAL_1WEEK))
         return candle[20:500]
     
-    def getTimeData(self, currency, minute=1):
-        candles = self.getCandlesticks(currency,minute) 
-        dates = []
-        open_data = []
-        high_data = []
-        low_data = []
-        close_data = []
-        
+    def getTimeData(self, currency, minute=1, step=15):
+        coin = {}
+        coin.update(self.getVolume(currency))
+        coin.update({
+            "STEP":step,
+            "RANGE":0,
+            "DATES":{"DATA":[],"COUNT":0},
+            "OPEN": {"DATA":[],"COUNT":0},
+            "CLOSE":{"DATA":[],"COUNT":0}, 
+            "HIGH":{"DATA":[],"COUNT":0}, 
+            "LOW":{"DATA":[],"COUNT":0}, 
+            "FIBONACCI":{"DATA":[],"COUNT":0},
+            "TA":{},
+        })
+        candles = self.getCandlesticks(currency,minute)
         for candle in candles:
-            dates.append(datetime.fromtimestamp(candle[0] / 1000.0).strftime('%Y-%m-%d %H:%M:%S.%f'))
-            open_data.append(float(candle[1]))
-            high_data.append(float(candle[2]))
-            low_data.append(float(candle[3]))
-            close_data.append(float(candle[4]))
-        volume = self.getVolume(currency)
-        return {"dates":dates,"open":open_data,"close":close_data,"high":high_data,"low":low_data,"volume":volume}
+            #coin["DATES"]["DATA"].append(datetime.fromtimestamp(candle[0] / 1000.0).strftime('%Y-%m-%d %H:%M'))
+            coin["DATES"]["DATA"].append(candle[0])
+            coin["OPEN"]["DATA"].append(float(candle[1]))
+            coin["CLOSE"]["DATA"].append(float(candle[2]))
+            coin["HIGH"]["DATA"].append(float(candle[3]))
+            coin["LOW"]["DATA"].append(float(candle[4]))
+        coin["DATES"]["COUNT"] = len(coin["DATES"]["DATA"])
+        coin["RANGE"] = int(coin["DATES"]["COUNT"]/coin["STEP"])
+        coin["DATES"].update({
+            "COUNT":len(coin["DATES"]["DATA"]),
+            "MIN":min(coin["DATES"]["DATA"]),
+            "MAX":max(coin["DATES"]["DATA"]),
+            "AVG":[mean(coin["DATES"]["DATA"][(coin["STEP"]*i):(coin["STEP"]*(i+1))-1]) for i in range(coin["RANGE"])],
+            "FULL_DATE":[(datetime.fromtimestamp(i / 1000.0).strftime('%Y-%m-%d %H:%M')) for i in coin["DATES"]["DATA"]],
+
+        })
+        coin["OPEN"].update({
+            "COUNT":len(coin["OPEN"]["DATA"]),
+            "MIN":min(coin["OPEN"]["DATA"]),
+            "MAX":max(coin["OPEN"]["DATA"]),
+            "AVG":[mean(coin["OPEN"]["DATA"][(coin["STEP"]*i):(coin["STEP"]*(i+1))-1]) for i in range(coin["RANGE"])],
+        })
+        coin["CLOSE"].update({
+            "COUNT":len(coin["CLOSE"]["DATA"]),
+            "MIN":min(coin["CLOSE"]["DATA"]),
+            "MAX":max(coin["CLOSE"]["DATA"]),
+            "AVG":[mean(coin["CLOSE"]["DATA"][(coin["STEP"]*i):(coin["STEP"]*(i+1))-1]) for i in range(coin["RANGE"])],
+        })
+        coin["HIGH"].update({
+            "COUNT":len(coin["HIGH"]["DATA"]),
+            "MIN":min(coin["HIGH"]["DATA"]),
+            "MAX":max(coin["HIGH"]["DATA"]),
+            "AVG":[mean(coin["HIGH"]["DATA"][(coin["STEP"]*i):(coin["STEP"]*(i+1))-1]) for i in range(coin["RANGE"])],
+        })
+        coin["LOW"].update({
+            "COUNT":len(coin["LOW"]["DATA"]),
+            "MIN":min(coin["LOW"]["DATA"]),
+            "MAX":max(coin["LOW"]["DATA"]),
+            "AVG":[mean(coin["LOW"]["DATA"][(coin["STEP"]*i):(coin["STEP"]*(i+1))-1]) for i in range(coin["RANGE"])],
+        })
+        coin["FIBONACCI"].update({
+            "DATA": {
+                "ASC":[[(float(max(coin["HIGH"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]) - float(max(coin["HIGH"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])-min(coin["LOW"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])) * float(i/100))) for i in self.FIBONACCI_VALUES] for j in range(coin["RANGE"])],
+                "DESC":[[(float(min(coin["LOW"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]) + float(max(coin["HIGH"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])-min(coin["LOW"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])) * float(i/100))) for i in self.FIBONACCI_VALUES] for j in range(coin["RANGE"])],
+            },
+            "MAX":[(float(max(coin["HIGH"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]))) for j in range(coin["RANGE"])],
+            "MIN":[(float(min(coin["LOW"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]))) for j in range(coin["RANGE"])],
+            "HIGH_LOW_AVG":[(float((mean(coin["HIGH"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])+mean(coin["LOW"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]))/2)) for j in range(coin["RANGE"])],
+            "OPEN_CLOSE_AVG":[(float((mean(coin["OPEN"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1])+mean(coin["CLOSE"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]))/2)) for j in range(coin["RANGE"])],
+            "START_DATE":[((datetime.fromtimestamp(min(coin["DATES"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]) / 1000.0)).strftime('%Y-%m-%d %H:%M:%S.%f')) for j in range(coin["RANGE"])],
+            "END_DATE":[((datetime.fromtimestamp(max(coin["DATES"]["DATA"][(coin["STEP"]*j):(coin["STEP"]*(j+1))-1]) / 1000.0)).strftime('%Y-%m-%d %H:%M:%S.%f')) for j in range(coin["RANGE"])],
+        })
+        coin["FIBONACCI"].update({
+            "COUNT":len(coin["FIBONACCI"]["MAX"])
+        })
+        temp = {"CLOSE_FINISHED_ARRAY":coin["CLOSE"]["DATA"][:-1]}
+        coin["TA"]["MACD"], coin["TA"]["MACD_SIGNAL"], coin["TA"]["MACD_HISTOGRAM"] = ta.MACD(np.asarray(temp["CLOSE_FINISHED_ARRAY"]))
+        coin["TA"]["RSI"] = ta.RSI(np.asarray(temp["CLOSE_FINISHED_ARRAY"]))
+        coin["TA"]["MACD"] = coin["TA"]["MACD"].tolist()
+        coin["TA"]["MACD_SIGNAL"] = coin["TA"]["MACD_SIGNAL"].tolist()
+        coin["TA"]["MACD_HISTOGRAM"] = coin["TA"]["MACD_HISTOGRAM"].tolist()
+        coin["TA"]["RSI"] = coin["TA"]["RSI"].tolist()
+        coin["TA"]["MACD"] = {
+            "DATA":coin["TA"]["MACD"], 
+            "COUNT":len(coin["TA"]["MACD"]),
+            "MIN":np.nanmin(coin["TA"]["MACD"]),
+            "MAX":np.nanmax(coin["TA"]["MACD"]),
+            "LAST":coin["TA"]["MACD"][-1],
+            "PREV":coin["TA"]["MACD"][-2]
+        }
+        coin["TA"]["MACD_HISTOGRAM"] = {
+            "DATA":coin["TA"]["MACD_HISTOGRAM"], 
+            "COUNT":len(coin["TA"]["MACD_HISTOGRAM"]),
+            "MIN":np.nanmin(coin["TA"]["MACD_HISTOGRAM"]),
+            "MAX":np.nanmax(coin["TA"]["MACD_HISTOGRAM"]),
+            "LAST":coin["TA"]["MACD_HISTOGRAM"][-1],
+            "PREV":coin["TA"]["MACD_HISTOGRAM"][-2]
+        }
+        coin["TA"]["MACD_SIGNAL"] = {
+            "DATA":coin["TA"]["MACD_SIGNAL"], 
+            "COUNT":len(coin["TA"]["MACD_SIGNAL"]),
+            "MIN":np.nanmin(coin["TA"]["MACD_SIGNAL"]),
+            "MAX":np.nanmax(coin["TA"]["MACD_SIGNAL"]),
+            "LAST":coin["TA"]["MACD_SIGNAL"][-1],
+            "PREV":coin["TA"]["MACD_SIGNAL"][-2]
+        }
+        coin["TA"]["RSI"] = {
+            "DATA":coin["TA"]["RSI"], 
+            "COUNT":len(coin["TA"]["RSI"]),
+            "MIN":np.nanmin(coin["TA"]["RSI"]),
+            "MAX":np.nanmax(coin["TA"]["RSI"]),
+            "LAST":coin["TA"]["RSI"][-1],
+            "PREV":coin["TA"]["RSI"][-2]
+        }
+        coin["TA"]["MACD_CROSS_UP"] = coin["TA"]["MACD"]["LAST"] > coin["TA"]["MACD_SIGNAL"]["LAST"] and coin["TA"]["MACD"]["PREV"] < coin["TA"]["MACD_SIGNAL"]["PREV"]
+        coin["TA"]["MACD_CROSS_DOWN"] = coin["TA"]["MACD"]["LAST"] < coin["TA"]["MACD_SIGNAL"]["LAST"] and coin["TA"]["MACD"]["PREV"] > coin["TA"]["MACD_SIGNAL"]["PREV"]
+        return coin
