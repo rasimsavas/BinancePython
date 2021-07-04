@@ -16,6 +16,16 @@ firstExchange = []
 TOTALASSETS = 4800
 BUYCOINSCOUNT = 3
 logging.basicConfig(filename='std.log', filemode='w+', format='%(levelname)s - %(message)s')
+
+
+
+
+#add some funcs 
+#def connectWallet():
+    #return assets
+
+#def buyCoin(BUYCOINSCOUNT, TOTALASSETS, DATA):
+
 '''
 DATA = []
 with open("statistics.json","r+") as file:
@@ -24,11 +34,6 @@ with open("statistics.json","r+") as file:
 COINS = DATA["mostCoins"]
 STATISTICS = DATA["statistics"]
 
-
-#def connectWallet():
-    #return assets
-
-#def buyCoin(BUYCOINSCOUNT, TOTALASSETS, DATA):
 
 prices = Trader().getPrices(currency=[(i['coin']) for i in COINS])
 #print(STATISTICS)
@@ -54,6 +59,7 @@ for i in list(prices.values()):
     )
 print(firstExchange)
 '''
+
 def calistir():
     sayac = 0
     while(True):
